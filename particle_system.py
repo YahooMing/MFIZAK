@@ -1,6 +1,8 @@
-from panda3d.core import Vec3, PointLight, CardMaker
+from panda3d.core import Vec3, PointLight
+from direct.gui.OnscreenText import OnscreenText
 from direct.showbase.ShowBase import ShowBase
 from direct.task import Task
+from panda3d.core import TextNode
 import random
 import math
 
@@ -27,7 +29,7 @@ class Emitter:
 
 
 class ParticleSystem:
-    def __init__(self, parent_node, emitter, max_particles=1000):
+    def __init__(self, parent_node, emitter, max_particles=1500):
         self.particles = []
         self.emitter = emitter
         self.parent_node = parent_node
@@ -37,10 +39,10 @@ class ParticleSystem:
         self.particle_nodes = []
 
         # Załaduj model sfery dla cząsteczek
-        self.particle_model = loader.loadModel("models/misc/sphere")  # Użycie modelu sfery
-        self.particle_model.setScale(0.1)  # Rozmiar cząsteczek
+        self.particle_model = loader.loadModel("models/misc/sphere")
+        self.particle_model.setScale(0.1)
 
-    def update(self, dt, ground_level):
+    def update(self, dt, ground_level, collider_position, collider_radius):
         for _ in range(int(self.emitter.rate * dt)):
             if len(self.particles) < self.max_particles:
                 particle = self.emitter.emit()
@@ -65,12 +67,18 @@ class ParticleSystem:
                     particle.position.z = ground_level
                     particle.velocity = Vec3(0, 0, 0)
 
+                # Kolizja z sferą
+                to_collider = particle.position - collider_position
+                if to_collider.length() <= collider_radius:
+                    particle.velocity = Vec3(0, 0, 0)
+                    particle.position = collider_position + to_collider.normalized() * collider_radius
+
                 self.particle_nodes[i].setPos(particle.position)
 
     def create_particle_node(self, particle):
         node = self.particle_model.copyTo(self.parent_node)
         node.setPos(particle.position)
-        node.setColor(*particle.color)  # Przypisanie koloru cząsteczki
+        node.setColor(*particle.color)
         return node
 
 
@@ -81,7 +89,7 @@ class ParticleApp(ShowBase):
 
         self.camera_radius = 25
         self.camera_angle = 0
-        self.camera_speed = 10  # Stopnie na sekundę
+        self.camera_speed = 10
 
         emitter = Emitter(position=(0, 0, 5), rate=500)
         self.particle_system = ParticleSystem(self.render, emitter)
@@ -92,25 +100,50 @@ class ParticleApp(ShowBase):
         self.render.setLight(light_node)
 
         self.create_ground()
+
+        # Dodaj sferę do kolizji
+        self.sphere_radius = 1
+        self.sphere_position = Vec3(2, 2, 1)
+        self.sphere = self.loader.loadModel("models/misc/sphere")
+        self.sphere.setScale(self.sphere_radius)
+        self.sphere.setPos(self.sphere_position)
+        self.sphere.setColor(1, 0, 0, 1)
+        self.sphere.reparentTo(self.render)
+
+        self.wind_active = False
+        self.accept("w", self.toggle_wind)
+
+        # Dodaj tekst na ekran
+        self.info_text = OnscreenText(
+            text="",
+            pos=(-1.2, 0.9),  # Lewy górny róg
+            scale=0.05,
+            align=TextNode.ALeft,  # Wyrównanie do lewej
+            fg=(1, 1, 1, 1),  # Kolor biały
+            bg=(0, 0, 0, 0.5),  # Tło półprzezroczyste czarne
+            mayChange=True,  # Pozwala na późniejszą zmianę
+        )
+
         self.taskMgr.add(self.update, "UpdateParticles")
         self.taskMgr.add(self.rotate_camera_around_center, "RotateCamera")
 
     def create_ground(self):
-        # Zamiast używać `grid.egg`, stwórzmy prostą podłogę za pomocą CardMaker
         from panda3d.core import CardMaker
         cm = CardMaker("ground")
-        cm.setFrame(-10, 10, -10, 10)  # Prostokąt 20x20 jednostek
+        cm.setFrame(-10, 10, -10, 10)
         ground = self.render.attachNewNode(cm.generate())
-        ground.setPos(0, 0, 0)  # Pozycja podłogi
-        ground.setHpr(0, -90, 0)  # Ustawienie podłogi poziomo
-        ground.setColor(0.2, 0.8, 0.2, 1)  # Kolor zielony
+        ground.setPos(0, 0, 0)
+        ground.setHpr(0, -90, 0)
+        ground.setColor(0.2, 0.8, 0.2, 1)
+
+    def toggle_wind(self):
+        self.wind_active = not self.wind_active
 
     def rotate_camera_around_center(self, task):
         dt = globalClock.getDt()
         self.camera_angle += self.camera_speed * dt
         angle_rad = math.radians(self.camera_angle)
 
-        # Oblicz nową pozycję kamery
         x = self.camera_radius * math.sin(angle_rad)
         y = self.camera_radius * math.cos(angle_rad)
         self.camera.setPos(x, y, 10)
@@ -120,7 +153,22 @@ class ParticleApp(ShowBase):
 
     def update(self, task):
         dt = globalClock.getDt()
-        self.particle_system.update(dt, ground_level=0)
+
+        if self.wind_active:
+            wind_force = (self.sphere_position - self.particle_system.emitter.position).normalized() * 20
+            self.particle_system.external_force = wind_force
+        else:
+            self.particle_system.external_force = Vec3(0, 0, 0)
+
+        self.particle_system.update(dt, ground_level=0, collider_position=self.sphere_position, collider_radius=self.sphere_radius)
+
+        # Aktualizacja tekstu
+        num_particles = len(self.particle_system.particles)
+        wind_status = "ON" if self.wind_active else "OFF"
+        self.info_text.setText(
+            f"Particles: {num_particles}\nPress 'W' to toggle wind\nWind: {wind_status}"
+        )
+
         return Task.cont
 
 
