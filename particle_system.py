@@ -8,47 +8,49 @@ import math
 
 
 class Particle:
-    def __init__(self, position, velocity, color, lifespan):
+    def __init__(self, position, velocity, color, lifespan, emitter_id):
         self.position = Vec3(position)
         self.velocity = Vec3(velocity)
         self.color = color
         self.lifespan = lifespan
         self.age = 0
+        self.emitter_id = emitter_id
 
 
 class Emitter:
-    def __init__(self, position, rate):
+    def __init__(self, position, rate, emitter_id):
         self.position = Vec3(position)
         self.rate = rate
+        self.emitter_id = emitter_id
 
     def emit(self):
         velocity = Vec3(random.uniform(-1, 1), random.uniform(-1, 1), random.uniform(1, 3))
         color = (random.random(), random.random(), random.random(), 1)
         lifespan = random.uniform(2, 5)
-        return Particle(self.position, velocity, color, lifespan)
+        return Particle(self.position, velocity, color, lifespan, self.emitter_id)
 
 
 class ParticleSystem:
-    def __init__(self, parent_node, emitter, max_particles=1500):
+    def __init__(self, parent_node, emitters, max_particles=1500):
         self.particles = []
-        self.emitter = emitter
+        self.emitters = emitters
         self.parent_node = parent_node
         self.max_particles = max_particles
-        self.gravity = Vec3(0, 0, -9.8)
+        self.gravity = Vec3(0, 0, 9.8)
         self.external_force = Vec3(0, 0, 0)
         self.particle_nodes = []
 
-        # Załaduj model sfery dla cząsteczek
         self.particle_model = loader.loadModel("models/misc/sphere")
         self.particle_model.setScale(0.1)
 
     def update(self, dt, ground_level, collider_position, collider_radius):
-        for _ in range(int(self.emitter.rate * dt)):
-            if len(self.particles) < self.max_particles:
-                particle = self.emitter.emit()
-                node = self.create_particle_node(particle)
-                self.particles.append(particle)
-                self.particle_nodes.append(node)
+        for emitter in self.emitters:
+            for _ in range(int(emitter.rate * dt)):
+                if len(self.particles) < self.max_particles:
+                    particle = emitter.emit()
+                    node = self.create_particle_node(particle)
+                    self.particles.append(particle)
+                    self.particle_nodes.append(node)
 
         for i in reversed(range(len(self.particles))):
             particle = self.particles[i]
@@ -59,15 +61,17 @@ class ParticleSystem:
                 self.particle_nodes[i].removeNode()
                 self.particle_nodes.pop(i)
             else:
-                particle.velocity += (self.gravity + self.external_force) * dt
+                if particle.emitter_id == 1:
+                    particle.velocity += (Vec3(0, 0, -9.8) + self.external_force) * dt
+                else:
+                    particle.velocity += (self.gravity + self.external_force) * dt
+
                 particle.position += particle.velocity * dt
 
-                # Kolizja z podłogą
                 if particle.position.z <= ground_level:
                     particle.position.z = ground_level
                     particle.velocity = Vec3(0, 0, 0)
 
-                # Kolizja z sferą
                 to_collider = particle.position - collider_position
                 if to_collider.length() <= collider_radius:
                     particle.velocity = Vec3(0, 0, 0)
@@ -91,8 +95,10 @@ class ParticleApp(ShowBase):
         self.camera_angle = 0
         self.camera_speed = 10
 
-        emitter = Emitter(position=(0, 0, 5), rate=500)
-        self.particle_system = ParticleSystem(self.render, emitter)
+        emitter1 = Emitter(position=(0, 0, 5), rate=200, emitter_id=1)
+        emitter2 = Emitter(position=(5, 0, 3), rate=500, emitter_id=0)
+
+        self.particle_system = ParticleSystem(self.render, [emitter1, emitter2])
 
         light = PointLight("point_light")
         light_node = self.render.attachNewNode(light)
@@ -101,7 +107,6 @@ class ParticleApp(ShowBase):
 
         self.create_ground()
 
-        # Dodaj sferę do kolizji
         self.sphere_radius = 1
         self.sphere_position = Vec3(2, 2, 1)
         self.sphere = self.loader.loadModel("models/misc/sphere")
@@ -113,15 +118,14 @@ class ParticleApp(ShowBase):
         self.wind_active = False
         self.accept("w", self.toggle_wind)
 
-        # Dodaj tekst na ekran
         self.info_text = OnscreenText(
             text="",
-            pos=(-1.2, 0.9),  # Lewy górny róg
+            pos=(-1.2, 0.9),
             scale=0.05,
-            align=TextNode.ALeft,  # Wyrównanie do lewej
-            fg=(1, 1, 1, 1),  # Kolor biały
-            bg=(0, 0, 0, 0.5),  # Tło półprzezroczyste czarne
-            mayChange=True,  # Pozwala na późniejszą zmianę
+            align=TextNode.ALeft,
+            fg=(1, 1, 1, 1),
+            bg=(0, 0, 0, 0.5),
+            mayChange=True,
         )
 
         self.taskMgr.add(self.update, "UpdateParticles")
@@ -155,14 +159,13 @@ class ParticleApp(ShowBase):
         dt = globalClock.getDt()
 
         if self.wind_active:
-            wind_force = (self.sphere_position - self.particle_system.emitter.position).normalized() * 20
+            wind_force = (self.sphere_position - self.particle_system.emitters[0].position).normalized() * 20
             self.particle_system.external_force = wind_force
         else:
             self.particle_system.external_force = Vec3(0, 0, 0)
 
         self.particle_system.update(dt, ground_level=0, collider_position=self.sphere_position, collider_radius=self.sphere_radius)
 
-        # Aktualizacja tekstu
         num_particles = len(self.particle_system.particles)
         wind_status = "ON" if self.wind_active else "OFF"
         self.info_text.setText(
