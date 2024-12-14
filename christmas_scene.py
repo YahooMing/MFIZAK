@@ -211,7 +211,7 @@ class Tree:
     def create_tree(self):
         trunk_height = 2
         trunk_radius = 0.5
-        self.trunk = self.create_cylinder(position=(0, 0, 0), radius=trunk_radius, height=trunk_height, color=(0.6, 0.3, 0.1, 1))
+        self.trunk = ModelCreator.create_cylinder(self.parent_node, position=(0, 0, 0), radius=trunk_radius, height=trunk_height, color=(0.6, 0.3, 0.1, 1))
 
         #self.create_branch_layer(self.tree_height-0.5, self.tree_radius-1.5)
         self.create_branch_layer(self.tree_height, self.tree_radius-2)
@@ -221,19 +221,22 @@ class Tree:
         self.create_branch_layer(self.tree_height + 4, self.tree_radius-4)
         self.create_branch_layer(self.tree_height + 5, self.tree_radius-4.5)
 
-        self.create_sphere(position=(0, 0, self.tree_height + 7), radius=0.5, color=(0, 1, 0, 1))
+        ModelCreator.create_sphere(self.parent_node, position=(0, 0, self.tree_height + 7), radius=0.5, color=(0, 1, 0, 1))
 
     def create_branch_layer(self, height, radius):
-        self.create_cylinder(position=(0, 0, height), radius=radius, height=2, color=(0, 1, 0, 1))
+        ModelCreator.create_cylinder(self.parent_node, position=(0, 0, height), radius=radius, height=2, color=(0, 1, 0, 1))
 
-    def create_cylinder(self, position, radius, height, color):
-        cylinder = self.create_geom_cylinder(radius, height)
-        node = self.parent_node.attachNewNode(cylinder)
+class ModelCreator:
+    @staticmethod
+    def create_cylinder(parent_node, position, radius, height, color):
+        cylinder = ModelCreator.create_geom_cylinder(radius, height)
+        node = parent_node.attachNewNode(cylinder)
         node.setPos(position)
         node.setColor(*color)
         return node
 
-    def create_geom_cylinder(self, radius, height):
+    @staticmethod
+    def create_geom_cylinder(radius, height):
         format = GeomVertexFormat.get_v3n3()
         vdata = GeomVertexData('cylinder', format, Geom.UHStatic)
 
@@ -254,7 +257,6 @@ class Tree:
             vertex_writer.addData3f(x, y, height)
             normal_writer.addData3f(0, 0, 1)
 
-        #This part doesn't work as it should, but have to leave it here
         tris = GeomTriangles(Geom.UHStatic)
         for i in range(num_segments):
             next_i = (i + 1) % num_segments
@@ -273,12 +275,13 @@ class Tree:
         geom_node.addGeom(geom)
         return geom_node
 
-    def create_sphere(self, position, radius, color):
+    @staticmethod
+    def create_sphere(parent_node, position, radius, color):
         sphere = loader.loadModel("models/misc/sphere")
         sphere.setScale(radius)
         sphere.setPos(position)
         sphere.setColor(*color)
-        sphere.reparentTo(self.parent_node)
+        sphere.reparentTo(parent_node)
 
 
 app = ParticleApp()
