@@ -18,17 +18,26 @@ class Particle:
 
 
 class Emitter:
-    def __init__(self, position, rate, emitter_id, color):
+    def __init__(self, position, rate, emitter_id, color, area_size=None):
         self.position = Vec3(position)
         self.rate = rate
         self.emitter_id = emitter_id
         self.color = color
+        self.area_size = area_size
 
     def emit(self):
-        velocity = Vec3(random.uniform(-1, 1), random.uniform(-1, 1), random.uniform(1, 3))
+        if self.area_size:
+            x = random.uniform(self.area_size[0], self.area_size[1])
+            y = random.uniform(self.area_size[2], self.area_size[3])
+            z = self.position.z
+            position = Vec3(x, y, z)
+        else:
+            position = Vec3(self.position)
+
+        velocity = Vec3(random.uniform(-0.5, 0.5), random.uniform(-0.5, 0.5), random.uniform(-2, -1))
         #color = (random.random(), random.random(), random.random(), 1)
-        lifespan = random.uniform(2, 5)
-        return Particle(self.position, velocity, self.color, lifespan, self.emitter_id)
+        lifespan = random.uniform(10, 12)
+        return Particle(position, velocity, self.color, lifespan, self.emitter_id)
 
 
 class ParticleSystem:
@@ -40,6 +49,7 @@ class ParticleSystem:
         self.gravity = Vec3(0, 0, 9.8)
         self.external_force = Vec3(0, 0, 0)
         self.particle_nodes = []
+        self.ground_areas = [(-10, 10, -10, 10)]
 
         self.particle_model = loader.loadModel("models/misc/sphere")
         self.particle_model.setScale(0.1)
@@ -69,7 +79,7 @@ class ParticleSystem:
 
                 particle.position += particle.velocity * dt
 
-                if particle.position.z <= ground_level:
+                if particle.position.z <= ground_level and self.is_over_ground(particle.position):
                     particle.position.z = ground_level
                     particle.velocity = Vec3(0, 0, 0)
 
@@ -86,6 +96,12 @@ class ParticleSystem:
         node.setColor(*particle.color)
         return node
 
+    def is_over_ground(self, position):
+        for area in self.ground_areas:
+            x_min, x_max, y_min, y_max = area
+            if x_min <= position.x <= x_max and y_min <= position.y <= y_max:
+                return True
+        return False
 
 class ParticleApp(ShowBase):
     def __init__(self):
@@ -98,7 +114,8 @@ class ParticleApp(ShowBase):
         self.camera_angle = 0
         self.camera_speed = 10
 
-        emitter1 = Emitter(position=(0, 0, 5), rate=100, emitter_id=1, color=(255,255,255))
+
+        emitter1 = Emitter(position=(0, 0, 10), rate=100, emitter_id=1, color=(255,255,255), area_size=(-9, 9, -9, 9))
         emitter2 = Emitter(position=(5, 0, 3), rate=100, emitter_id=0, color=(0,0,0))
 
         self.particle_system = ParticleSystem(self.render, [emitter1, emitter2])
@@ -158,6 +175,8 @@ class ParticleApp(ShowBase):
         self.camera.lookAt(0, 0, 0)
 
         return Task.cont
+
+
 
     def update(self, task):
         dt = globalClock.getDt()
