@@ -118,9 +118,10 @@ class ParticleApp(ShowBase):
 
 
         emitter1 = Emitter(position=(0, 0, 10), rate=100, emitter_id=1, color=(255,255,255), area_size=(-9, 9, -9, 9))
-        emitter2 = Emitter(position=(5, 0, 3), rate=100, emitter_id=0, color=(0,0,0))
+        emitter2 = Emitter(position=(5, 5, 0.5), rate=100, emitter_id=0, color=(0,0,0))
+        emitter3 = Emitter(position=(5, 5, 0.5), rate=50, emitter_id=0, color=(1, 0.5, 0, 1))
 
-        self.particle_system = ParticleSystem(self.render, [emitter1, emitter2])
+        self.particle_system = ParticleSystem(self.render, [emitter1, emitter2, emitter3])
 
         light = PointLight("point_light")
         light_node = self.render.attachNewNode(light)
@@ -129,6 +130,8 @@ class ParticleApp(ShowBase):
 
         self.create_ground()
         self.tree = Tree(self.render)
+
+        self.fireplace = Fireplace(self.render, position=Vec3(5, 5, -0.5))
 
 
         #self.sphere_radius = 1
@@ -282,6 +285,42 @@ class ModelCreator:
         sphere.setPos(position)
         sphere.setColor(*color)
         sphere.reparentTo(parent_node)
+
+class Fireplace:
+    def __init__(self, parent_node, position):
+        self.parent_node = parent_node
+        self.position = position
+        self.create_fireplace()
+
+    def create_fireplace(self):
+        #self.firepit = ModelCreator.create_cylinder(self.parent_node, position=self.position, radius=2, height=0.2, color=(0.5, 0.3, 0.1, 1))
+        self.create_wood_stack(self.position)
+
+    def create_wood_stack(self, position):
+        self.central_wood = ModelCreator.create_cylinder(
+            self.parent_node,
+            position=position,
+            radius=0.1,
+            height=1,
+            color=(0.6, 0.3, 0.1, 1)
+        )
+        angle_offset = math.radians(360 / 3)
+        radius = 0.5
+
+        for i in range(3):
+            angle = i * angle_offset
+            x_offset = radius * math.cos(angle)
+            y_offset = radius * math.sin(angle)
+
+            wood_piece = ModelCreator.create_cylinder(
+                self.parent_node,
+                position=position + Vec3(x_offset, y_offset, 0.5),
+                radius=0.1,
+                height=1,
+                color=(0.6, 0.3, 0.1, 1)
+            )
+
+            wood_piece.lookAt(position)
 
 
 app = ParticleApp()
