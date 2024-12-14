@@ -5,6 +5,8 @@ from direct.task import Task
 from panda3d.core import TextNode
 import random
 import math
+from panda3d.core import NodePath, Geom, GeomNode
+from panda3d.core import GeomVertexFormat, GeomVertexData, GeomVertexWriter, GeomTriangles
 
 
 class Particle:
@@ -110,7 +112,7 @@ class ParticleApp(ShowBase):
 
         self.setBackgroundColor(0.05, 0.05, 0.2, 1)
 
-        self.camera_radius = 25
+        self.camera_radius = 35
         self.camera_angle = 0
         self.camera_speed = 10
 
@@ -126,6 +128,7 @@ class ParticleApp(ShowBase):
         self.render.setLight(light_node)
 
         self.create_ground()
+        self.tree = Tree(self.render)
 
 
         #self.sphere_radius = 1
@@ -197,6 +200,85 @@ class ParticleApp(ShowBase):
         )
 
         return Task.cont
+
+class Tree:
+    def __init__(self, parent_node):
+        self.parent_node = parent_node
+        self.tree_height = 1
+        self.tree_radius = 5
+        self.create_tree()
+
+    def create_tree(self):
+        trunk_height = 2
+        trunk_radius = 0.5
+        self.trunk = self.create_cylinder(position=(0, 0, 0), radius=trunk_radius, height=trunk_height, color=(0.6, 0.3, 0.1, 1))
+
+        #self.create_branch_layer(self.tree_height-0.5, self.tree_radius-1.5)
+        self.create_branch_layer(self.tree_height, self.tree_radius-2)
+        self.create_branch_layer(self.tree_height + 1, self.tree_radius-2.5)
+        self.create_branch_layer(self.tree_height + 2, self.tree_radius-3)
+        self.create_branch_layer(self.tree_height + 3, self.tree_radius-3.5)
+        self.create_branch_layer(self.tree_height + 4, self.tree_radius-4)
+        self.create_branch_layer(self.tree_height + 5, self.tree_radius-4.5)
+
+        self.create_sphere(position=(0, 0, self.tree_height + 7), radius=0.5, color=(0, 1, 0, 1))
+
+    def create_branch_layer(self, height, radius):
+        self.create_cylinder(position=(0, 0, height), radius=radius, height=2, color=(0, 1, 0, 1))
+
+    def create_cylinder(self, position, radius, height, color):
+        cylinder = self.create_geom_cylinder(radius, height)
+        node = self.parent_node.attachNewNode(cylinder)
+        node.setPos(position)
+        node.setColor(*color)
+        return node
+
+    def create_geom_cylinder(self, radius, height):
+        format = GeomVertexFormat.get_v3n3()
+        vdata = GeomVertexData('cylinder', format, Geom.UHStatic)
+
+        vertex_writer = GeomVertexWriter(vdata, 'vertex')
+        normal_writer = GeomVertexWriter(vdata, 'normal')
+
+        num_segments = 16
+        angle_step = 2 * 3.14159 / num_segments
+
+        for i in range(num_segments):
+            angle = i * angle_step
+            x = radius * math.cos(angle)
+            y = radius * math.sin(angle)
+
+            vertex_writer.addData3f(x, y, 0)
+            normal_writer.addData3f(0, 0, -1)
+
+            vertex_writer.addData3f(x, y, height)
+            normal_writer.addData3f(0, 0, 1)
+
+        #This part doesn't work as it should, but have to leave it here
+        tris = GeomTriangles(Geom.UHStatic)
+        for i in range(num_segments):
+            next_i = (i + 1) % num_segments
+
+            tris.addVertex(i * 2)
+            tris.addVertex(next_i * 2)
+            tris.addVertex(i * 2 + 1)
+
+            tris.addVertex(next_i * 2 + 1)
+            tris.addVertex(i * 2 + 1)
+            tris.addVertex(next_i * 2)
+
+        geom = Geom(vdata)
+        geom.addPrimitive(tris)
+        geom_node = GeomNode('cylinder')
+        geom_node.addGeom(geom)
+        return geom_node
+
+    def create_sphere(self, position, radius, color):
+        sphere = loader.loadModel("models/misc/sphere")
+        sphere.setScale(radius)
+        sphere.setPos(position)
+        sphere.setColor(*color)
+        sphere.reparentTo(self.parent_node)
 
 
 app = ParticleApp()
